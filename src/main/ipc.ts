@@ -2,12 +2,14 @@ import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'elect
 import type { AppAPI } from '../preload/api'
 import type { createProductRepository } from './database/products'
 import type { createQuoteRepository } from './database/quotes'
+import type { createSyncService } from './sync'
 
 export function registerIpcHandlers(
   getWindow: () => BrowserWindow | null,
   rendererUrl: string,
   products: ReturnType<typeof createProductRepository>,
-  quotes: ReturnType<typeof createQuoteRepository>
+  quotes: ReturnType<typeof createQuoteRepository>,
+  sync: ReturnType<typeof createSyncService>
 ): void {
   const validateSender = (event: IpcMainInvokeEvent): void => {
     const window = getWindow()
@@ -27,6 +29,14 @@ export function registerIpcHandlers(
   ipcMain.handle('app:get-version', (event): Awaited<ReturnType<AppAPI['getAppVersion']>> => {
     validateSender(event)
     return app.getVersion()
+  })
+  ipcMain.handle('sync:now', (event) => {
+    validateSender(event)
+    return sync.syncNow()
+  })
+  ipcMain.handle('sync:status', (event) => {
+    validateSender(event)
+    return sync.getSyncStatus()
   })
   ipcMain.handle('products:get-all', (event): Awaited<ReturnType<AppAPI['getProducts']>> => {
     validateSender(event)

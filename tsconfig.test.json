@@ -9,5 +9,5 @@
     "rootDir": "src",
     "outDir": "out/tests"
   },
-  "include": ["src/main/database/**/*.ts", "src/shared/**/*.ts", "src/preload/api.d.ts"]
+  "include": ["src/main/database/**/*.ts", "src/main/sync/**/*.ts", "src/shared/**/*.ts", "src/preload/api.d.ts"]
 }

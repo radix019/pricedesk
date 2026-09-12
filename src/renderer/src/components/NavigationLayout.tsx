@@ -18,6 +18,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useSidebarStore } from '../stores/sidebar'
 import { useAppVersionQuery } from '../queries/ipc'
 import Versions from './Versions'
+import SyncPanel from './SyncPanel'
 
 export default function NavigationLayout(): React.JSX.Element {
   const isOpen = useSidebarStore((state) => state.isOpen)
@@ -103,6 +104,7 @@ export default function NavigationLayout(): React.JSX.Element {
             '& .catalogue h1': { fontSize: { xs: 24, lg: 30 }, lineHeight: 1.3 }
           }}
         >
+          <SyncPanel />
           <Suspense fallback={<Typography role="status">Loading page…</Typography>}>
             <Outlet />
           </Suspense>

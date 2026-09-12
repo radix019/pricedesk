@@ -1,5 +1,33 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppAPI, Product, Quote, QuoteSummary, RuntimeInfo } from './api'
+import type { SyncStatus } from '../shared/sync'
+
+function validateSyncStatus(value: unknown): SyncStatus {
+  if (!value || typeof value !== 'object') throw new Error('Invalid sync status')
+  const status = value as SyncStatus
+  if (
+    typeof status.running !== 'boolean' ||
+    ![status.pendingCount, status.failedCount, status.syncedCount].every(
+      (n) => Number.isSafeInteger(n) && n >= 0
+    ) ||
+    !Array.isArray(status.failures) ||
+    !status.failures.every(
+      (row) =>
+        row &&
+        Number.isSafeInteger(row.quoteId) &&
+        row.quoteId > 0 &&
+        typeof row.operationId === 'string' &&
+        ['pending', 'failed'].includes(row.status) &&
+        Number.isSafeInteger(row.attemptCount) &&
+        row.attemptCount >= 0 &&
+        (row.nextRetryAt === null || Number.isSafeInteger(row.nextRetryAt)) &&
+        typeof row.lastError === 'string'
+    )
+  ) {
+    throw new Error('Invalid sync status')
+  }
+  return status
+}
 
 function isSummary(value: unknown): value is QuoteSummary {
   if (typeof value !== 'object' || value === null) return false
@@ -8,6 +36,7 @@ function isSummary(value: unknown): value is QuoteSummary {
     typeof row.id === 'number' &&
     Number.isSafeInteger(row.id) &&
     row.id > 0 &&
+    typeof row.globalId === 'string' &&
     typeof row.customerName === 'string' &&
     typeof row.createdAt === 'string' &&
     ['subtotalPaise', 'discountPaise', 'totalPaise'].every(
@@ -48,6 +77,8 @@ function isProduct(value: unknown): value is Product {
 }
 
 const api: AppAPI = {
+  syncNow: async () => validateSyncStatus(await ipcRenderer.invoke('sync:now')),
+  getSyncStatus: async () => validateSyncStatus(await ipcRenderer.invoke('sync:status')),
   getAppVersion: async () => {
     const version: unknown = await ipcRenderer.invoke('app:get-version')
     if (typeof version !== 'string') throw new Error('Invalid app version response')

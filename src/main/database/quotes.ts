@@ -1,4 +1,6 @@
 import type Database from 'better-sqlite3'
+import { randomUUID } from 'node:crypto'
+import { canonicalJson, type UploadPayload } from '../../shared/sync'
 import type { CreateQuoteInput, Product, Quote, QuoteItem, QuoteSummary } from '../../preload/api'
 import { calculateTotals, requireInteger } from '../../shared/money'
 
@@ -41,8 +43,11 @@ export function createQuoteRepository(database: Database.Database): {
 } {
   const product = database.prepare<[number], Product>('SELECT * FROM products WHERE id = ?')
   const insertQuote = database.prepare(`INSERT INTO quotes
-    (customerName, createdAt, subtotalPaise, discountPaise, totalPaise)
-    VALUES (@customerName, @createdAt, @subtotalPaise, @discountPaise, @totalPaise)`)
+    (globalId, customerName, createdAt, subtotalPaise, discountPaise, totalPaise)
+    VALUES (@globalId, @customerName, @createdAt, @subtotalPaise, @discountPaise, @totalPaise)`)
+  const enqueue =
+    database.prepare(`INSERT INTO quote_outbox (operationId, quoteId, payload, nextRetryAt)
+    VALUES (?, ?, ?, 0)`)
   const insertItem = database.prepare(`INSERT INTO quote_items
     (quoteId, productId, sku, name, unitPricePaise, quantity, lineTotalPaise)
     VALUES (@quoteId, @productId, @sku, @name, @unitPricePaise, @quantity, @lineTotalPaise)`)
@@ -65,6 +70,7 @@ export function createQuoteRepository(database: Database.Database): {
     })
     const totals = calculateTotals(snapshots, input.discountPaise)
     const header = {
+      globalId: randomUUID(),
       customerName: input.customerName,
       createdAt: new Date().toISOString(),
       subtotalPaise: totals.subtotalPaise,
@@ -78,6 +84,17 @@ export function createQuoteRepository(database: Database.Database): {
       insertItem.run({ quoteId: id, ...snapshot })
       return snapshot
     })
+    const payload: UploadPayload = {
+      operationId: randomUUID(),
+      quote: {
+        globalId: header.globalId,
+        customerName: header.customerName,
+        createdAt: header.createdAt,
+        discountPaise: header.discountPaise,
+        items: snapshots
+      }
+    }
+    enqueue.run(payload.operationId, id, canonicalJson(payload))
     return { id, ...header, items: savedItems }
   })
   return {

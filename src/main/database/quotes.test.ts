@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { openDatabase } from './index'
 import { createQuoteRepository } from './quotes'
+import { migrateDatabase } from './migrations'
 
 const input = {
   customerName: ' Customer ',
@@ -33,7 +34,7 @@ test('quotes calculate current prices and preserve snapshots after catalogue edi
   try {
     const repo = createQuoteRepository(db)
     assert.equal(db.pragma('foreign_keys', { simple: true }), 1)
-    assert.equal(db.pragma('user_version', { simple: true }), 2)
+    assert.equal(db.pragma('user_version', { simple: true }), 3)
     db.prepare('UPDATE products SET pricePaise = 10001 WHERE id = 1').run()
     const quote = repo.createQuote(input)
     assert.equal(quote.customerName, 'Customer')
@@ -119,5 +120,53 @@ test('migration upgrades a version-one catalogue without reseeding or changing p
   } finally {
     db.close()
     rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('outbox insertion failure rolls back quote and all items; payload stays immutable', () => {
+  const { db, close } = fixture()
+  try {
+    const repo = createQuoteRepository(db)
+    db.exec(`CREATE TRIGGER fail_outbox BEFORE INSERT ON quote_outbox
+      BEGIN SELECT RAISE(ABORT, 'Injected outbox failure'); END`)
+    assert.throws(() => repo.createQuote(input), /Injected outbox failure/)
+    for (const table of ['quotes', 'quote_items', 'quote_outbox']) {
+      assert.equal((db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 0)
+    }
+    db.exec('DROP TRIGGER fail_outbox')
+    const quote = repo.createQuote(input)
+    const row = db.prepare('SELECT * FROM quote_outbox').get() as {
+      payload: string
+      operationId: string
+    }
+    assert.equal(JSON.parse(row.payload).quote.globalId, quote.globalId)
+    assert.equal(JSON.parse(row.payload).operationId, row.operationId)
+    assert.throws(() => db.prepare("UPDATE quote_outbox SET payload = '{}'").run(), /immutable/)
+    db.prepare('UPDATE products SET pricePaise = 1').run()
+    assert.equal(
+      (db.prepare('SELECT payload FROM quote_outbox').get() as { payload: string }).payload,
+      row.payload
+    )
+  } finally {
+    close()
+  }
+})
+
+test('version-two quotes receive stable global IDs without historical uploads', () => {
+  const { db, close } = fixture()
+  try {
+    // Restore the exact version-two schema, keeping catalogue data.
+    db.exec(`DROP TABLE quote_outbox; DROP TRIGGER quotes_require_global_id;
+      DROP TRIGGER quotes_immutable_global_id; DROP INDEX quotes_global_id;
+      ALTER TABLE quotes DROP COLUMN globalId; PRAGMA user_version = 2;
+      INSERT INTO quotes VALUES (1, 'Existing', '2026-01-01T00:00:00.000Z', 0, 0, 0)`)
+    migrateDatabase(db)
+    const quote = createQuoteRepository(db).getQuote(1)!
+    assert.match(quote.globalId, /^[0-9a-f-]{36}$/)
+    migrateDatabase(db)
+    assert.equal(createQuoteRepository(db).getQuote(1)!.globalId, quote.globalId)
+    assert.equal((db.prepare('SELECT count(*) AS n FROM quote_outbox').get() as { n: number }).n, 0)
+  } finally {
+    close()
   }
 })

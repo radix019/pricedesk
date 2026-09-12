@@ -6,6 +6,8 @@ export interface Product {
 }
 
 export interface AppAPI {
+  syncNow: () => Promise<SyncStatus>
+  getSyncStatus: () => Promise<SyncStatus>
   getAppVersion: () => Promise<string>
   getProducts: () => Promise<Product[]>
   createQuote: (input: CreateQuoteInput) => Promise<Quote>
@@ -20,6 +22,7 @@ export interface CreateQuoteInput {
 }
 
 export interface QuoteSummary {
+  globalId: string
   id: number
   customerName: string
   createdAt: string
@@ -50,3 +53,4 @@ export interface RuntimeInfo {
     }
   }
 }
+import type { SyncStatus } from '../shared/sync'

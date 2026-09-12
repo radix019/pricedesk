@@ -7,9 +7,15 @@ import { openDatabase } from './database'
 import { createProductRepository } from './database/products'
 import { createQuoteRepository } from './database/quotes'
 import { registerIpcHandlers } from './ipc'
+import { createSyncService, createTransport } from './sync'
 
 let mainWindow: BrowserWindow | null = null
 let database: ReturnType<typeof openDatabase> | undefined
+let sync: ReturnType<typeof createSyncService> | undefined
+let shuttingDown = false
+// One main process owns the local outbox.
+const ownsInstanceLock = app.requestSingleInstanceLock()
+if (!ownsInstanceLock) app.quit()
 const rendererUrl =
   is.dev && process.env['ELECTRON_RENDERER_URL']
     ? new URL(process.env['ELECTRON_RENDERER_URL']).href
@@ -52,6 +58,7 @@ function createWindow(): void {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  if (!ownsInstanceLock) return
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
@@ -64,12 +71,15 @@ app.whenReady().then(() => {
 
   try {
     database = openDatabase(app.getPath('userData'))
+    sync = createSyncService(database, createTransport(process.env.PRICEDESK_API_PORT))
     registerIpcHandlers(
       () => mainWindow,
       rendererUrl,
       createProductRepository(database),
-      createQuoteRepository(database)
+      createQuoteRepository(database),
+      sync
     )
+    sync.start()
   } catch (error) {
     console.error('Failed to initialize PriceDesk', error)
     dialog.showErrorBox(
@@ -98,8 +108,17 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('will-quit', () => {
-  database?.close()
+app.on('before-quit', (event) => {
+  if (shuttingDown || !sync) return
+  event.preventDefault()
+  shuttingDown = true
+  void sync
+    .stop()
+    .catch((error) => console.error('Sync shutdown failed', error))
+    .finally(() => {
+      database?.close()
+      app.quit()
+    })
 })
 
 // In this file you can include the rest of your app's specific main process
