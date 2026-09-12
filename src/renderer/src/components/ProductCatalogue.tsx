@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Product } from '../../../preload/api'
+import { Typography } from '@mui/material'
 
 const formatPrice = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
 
@@ -30,9 +31,11 @@ export default function ProductCatalogue(): React.JSX.Element {
 
   return (
     <section className="catalogue" aria-labelledby="catalogue-title" aria-busy={loading}>
-      <h1 id="catalogue-title">PriceDesk product catalogue</h1>
+      <Typography variant="h1" id="catalogue-title">
+        PriceDesk product catalogue
+      </Typography>
       {loading ? (
-        <p role="status">Loading products…</p>
+        <Typography role="status">Loading products…</Typography>
       ) : error ? (
         <div className="action">
           <p role="alert">{error}</p>
@@ -48,25 +51,35 @@ export default function ProductCatalogue(): React.JSX.Element {
           </button>
         </div>
       ) : products.length === 0 ? (
-        <p role="status">No products yet.</p>
+        <Typography role="status">No products yet.</Typography>
       ) : (
         <table>
           <caption>Prices in Indian rupees</caption>
           <thead>
             <tr>
-              <th scope="col">SKU</th>
-              <th scope="col">Name</th>
+              <th scope="col">
+                <Typography> SKU</Typography>
+              </th>
+              <th scope="col">
+                <Typography>Name</Typography>
+              </th>
               <th scope="col" className="price">
-                Price
+                <Typography>Price</Typography>
               </th>
             </tr>
           </thead>
           <tbody>
             {products.map((product) => (
               <tr key={product.id}>
-                <td>{product.sku}</td>
-                <td>{product.name}</td>
-                <td className="price">{formatPrice.format(product.pricePaise / 100)}</td>
+                <td>
+                  <Typography>{product.sku}</Typography>
+                </td>
+                <td>
+                  <Typography>{product.name}</Typography>
+                </td>
+                <td className="price">
+                  <Typography>{formatPrice.format(product.pricePaise / 100)}</Typography>
+                </td>
               </tr>
             ))}
           </tbody>

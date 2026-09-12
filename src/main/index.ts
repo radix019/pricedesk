@@ -5,6 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { openDatabase } from './database'
 import { createProductRepository } from './database/products'
+import { createQuoteRepository } from './database/quotes'
 import { registerIpcHandlers } from './ipc'
 
 let mainWindow: BrowserWindow | null = null
@@ -63,7 +64,12 @@ app.whenReady().then(() => {
 
   try {
     database = openDatabase(app.getPath('userData'))
-    registerIpcHandlers(() => mainWindow, rendererUrl, createProductRepository(database))
+    registerIpcHandlers(
+      () => mainWindow,
+      rendererUrl,
+      createProductRepository(database),
+      createQuoteRepository(database)
+    )
   } catch (error) {
     console.error('Failed to initialize PriceDesk', error)
     dialog.showErrorBox(

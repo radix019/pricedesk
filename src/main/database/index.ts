@@ -7,6 +7,7 @@ export function openDatabase(userDataPath: string): Database.Database {
   mkdirSync(userDataPath, { recursive: true })
   const database = new Database(join(userDataPath, 'pricedesk.sqlite'))
   try {
+    database.pragma('foreign_keys = ON')
     migrateDatabase(database)
     return database
   } catch (error) {

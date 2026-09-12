@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": false,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "target": "ES2022",
+    "rootDir": "src",
+    "outDir": "out/tests"
+  },
+  "include": ["src/main/database/**/*.ts", "src/shared/**/*.ts", "src/preload/api.d.ts"]
+}

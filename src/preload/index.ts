@@ -1,5 +1,38 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppAPI, Product, RuntimeInfo } from './api'
+import type { AppAPI, Product, Quote, QuoteSummary, RuntimeInfo } from './api'
+
+function isSummary(value: unknown): value is QuoteSummary {
+  if (typeof value !== 'object' || value === null) return false
+  const row = value as Record<string, unknown>
+  return (
+    typeof row.id === 'number' &&
+    Number.isSafeInteger(row.id) &&
+    row.id > 0 &&
+    typeof row.customerName === 'string' &&
+    typeof row.createdAt === 'string' &&
+    ['subtotalPaise', 'discountPaise', 'totalPaise'].every(
+      (key) => typeof row[key] === 'number' && Number.isSafeInteger(row[key]) && row[key] >= 0
+    )
+  )
+}
+
+function isQuote(value: unknown): value is Quote {
+  if (!isSummary(value) || !('items' in value) || !Array.isArray(value.items)) return false
+  return value.items.every((item: unknown) => {
+    if (typeof item !== 'object' || item === null) return false
+    const row = item as Record<string, unknown>
+    return (
+      typeof row.sku === 'string' &&
+      typeof row.name === 'string' &&
+      ['productId', 'quantity', 'unitPricePaise', 'lineTotalPaise'].every(
+        (key) =>
+          typeof row[key] === 'number' &&
+          Number.isSafeInteger(row[key]) &&
+          row[key] >= (key === 'productId' || key === 'quantity' ? 1 : 0)
+      )
+    )
+  })
+}
 
 function isProduct(value: unknown): value is Product {
   if (typeof value !== 'object' || value === null) return false
@@ -26,6 +59,22 @@ const api: AppAPI = {
       throw new Error('Invalid products response')
     }
     return products
+  },
+  createQuote: async (input) => {
+    const quote: unknown = await ipcRenderer.invoke('quotes:create', input)
+    if (!isQuote(quote)) throw new Error('Invalid quote response')
+    return quote
+  },
+  listQuotes: async () => {
+    const quotes: unknown = await ipcRenderer.invoke('quotes:list')
+    if (!Array.isArray(quotes) || !quotes.every(isSummary))
+      throw new Error('Invalid quotes response')
+    return quotes
+  },
+  getQuote: async (id) => {
+    const quote: unknown = await ipcRenderer.invoke('quotes:get', id)
+    if (quote !== null && !isQuote(quote)) throw new Error('Invalid quote response')
+    return quote
   }
 }
 
