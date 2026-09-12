@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { getIn, useFormik } from 'formik'
 import * as Yup from 'yup'
 import type { Product, Quote } from '../../../preload/api'
 import { calculateTotals, rupeesToPaise } from '../../../shared/money'
+import { useCreateQuoteMutation } from '../queries/ipc'
 
 const format = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
 const initialValues = {
@@ -20,8 +21,7 @@ export default function QuoteForm({
   onSaved: (quote: Quote) => void
 }): React.JSX.Element {
   const pending = useRef(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const mutation = useCreateQuoteMutation()
   const schema = Yup.object({
     customerName: Yup.string().trim().required('Enter a customer name').max(200),
     items: Yup.array()
@@ -98,10 +98,9 @@ export default function QuoteForm({
     onSubmit: async (values, helpers) => {
       if (pending.current) return
       pending.current = true
-      setError(null)
-      setSuccess(null)
+      mutation.reset()
       try {
-        const quote = await window.api.createQuote({
+        const quote = await mutation.mutateAsync({
           customerName: values.customerName.trim(),
           items: values.items.map((row) => ({
             productId: Number(row.productId),
@@ -110,14 +109,9 @@ export default function QuoteForm({
           discountPaise: rupeesToPaise(values.discount)
         })
         helpers.resetForm()
-        setSuccess(`Quote #${quote.id} saved for ${quote.customerName}.`)
         onSaved(quote)
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-            : 'Could not save quote. Please try again.'
-        )
+      } catch {
+        // Mutation state supplies the error; keep the Formik draft for correction or retry.
       } finally {
         pending.current = false
       }
@@ -151,8 +145,14 @@ export default function QuoteForm({
         <Typography variant="h5" component="h2">
           New quotation
         </Typography>
-        {error && <Alert severity="error">{error}</Alert>}
-        {success && <Alert severity="success">{success}</Alert>}
+        {mutation.isError && (
+          <Alert severity="error">
+            {mutation.error.message.replace(
+              /^Error invoking remote method '[^']+': (Error: )?/,
+              ''
+            )}
+          </Alert>
+        )}
         {products.length === 0 && (
           <Alert severity="info">Add catalogue products before creating a quote.</Alert>
         )}
@@ -161,14 +161,14 @@ export default function QuoteForm({
           disabled={form.isSubmitting}
           sx={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
         >
-          <Stack spacing={2}>
+          <Stack spacing={4}>
             <TextField
               label="Customer name"
               {...form.getFieldProps('customerName')}
               {...field('customerName')}
             />
             {form.values.items.map((_, index) => (
-              <Stack key={index} direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Stack key={index} direction={{ xs: 'column', sm: 'row' }} spacing={7}>
                 <TextField
                   select
                   label={`Product ${index + 1}`}
@@ -191,6 +191,8 @@ export default function QuoteForm({
                 />
                 <Button
                   type="button"
+                  variant="outlined"
+                  color="warning"
                   disabled={form.isSubmitting || form.values.items.length === 1}
                   onClick={() =>
                     form.setFieldValue(
@@ -208,6 +210,8 @@ export default function QuoteForm({
             )}
             <Button
               type="button"
+              color="success"
+              sx={{ fontSize: '1.5rem' }}
               disabled={form.isSubmitting || form.values.items.length >= 100}
               onClick={() =>
                 form.setFieldValue('items', [
@@ -216,7 +220,7 @@ export default function QuoteForm({
                 ])
               }
             >
-              Add product row
+              + Add Product
             </Button>
             <TextField
               label="Fixed discount (₹)"
@@ -236,6 +240,7 @@ export default function QuoteForm({
         <Button
           type="submit"
           variant="contained"
+          sx={{ width: '20%' }}
           disabled={form.isSubmitting || products.length === 0}
         >
           {form.isSubmitting ? 'Saving quote…' : 'Save quote'}

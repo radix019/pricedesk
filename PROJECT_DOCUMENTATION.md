@@ -26,6 +26,16 @@ These functions are available to React through `window.api`. Their handlers live
 - `src/renderer/src/`: Contains the catalogue, MUI/Formik/Yup quote form, saved-quotes list, and detail view.
 - `src/shared/money.ts`: Converts rupee input to integer paise and checks monetary calculations. All stored monetary values use paise; saved item snapshots preserve historical SKU, name, and unit price.
 
+## Navigation and renderer state
+
+`main.tsx` provides one stable QueryClient and a HashRouter, so packaged URLs such as `index.html#/quotes/1` work without a web server. `App.tsx` lazy-loads the `/products`, `/quotes`, `/quotes/new`, `/quotes/:id`, and not-found pages inside a shared MUI navigation layout with a Suspense loading state.
+
+- `src/renderer/src/queries/ipc.ts`: Typed hooks call the existing preload API using `['products']`, `['quotes']`, and `['quotes', id]` keys. The quote-creation mutation caches the saved detail and invalidates the quotes list before navigating to the saved quote.
+- Local IPC queries and mutations use `networkMode: 'always'` and no automatic retries. These options are scoped to IPC hooks; future remote HTTP operations retain TanStack Query's default network behavior.
+- `src/renderer/src/stores/sidebar.ts`: Zustand holds only sidebar visibility and its actions. Form drafts stay in Formik, and database records stay in the Query cache.
+
+To check offline navigation, build and open PriceDesk, set DevTools Network to **Offline**, navigate between products and quotes, and save a new quote. Confirm its detail opens, the saved list includes it, and reloading its hash URL still works.
+
 ## Development checks
 
 Run `pnpm dev` to start development, `pnpm typecheck` and `pnpm lint` for static checks, and `pnpm test` for calculation and database tests, including transaction rollback.
