@@ -5,7 +5,8 @@ import electron from 'electron'
 for (const file of [
   'out/tests/shared/money.test.js',
   'out/tests/main/database/quotes.test.js',
-  'out/tests/main/sync/sync.test.js'
+  'out/tests/main/sync/sync.test.js',
+  'out/tests/main/excel/excel.test.js'
 ]) {
   const result = spawnSync(electron, [file], {
     stdio: 'inherit',

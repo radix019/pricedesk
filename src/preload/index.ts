@@ -1,6 +1,64 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppAPI, Product, Quote, QuoteSummary, RuntimeInfo } from './api'
 import type { SyncStatus } from '../shared/sync'
+import type { ExcelExportResult, ProductImportResult } from '../shared/excel'
+
+async function invokeExcel(
+  channel:
+    | 'excel:export-quote'
+    | 'excel:export-product-template'
+    | 'excel:preview-products'
+    | 'excel:confirm-products',
+  ...args: unknown[]
+): Promise<unknown> {
+  try {
+    return await ipcRenderer.invoke(channel, ...args)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The Excel operation failed.'
+    throw new Error(message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, ''))
+  }
+}
+
+function validateExport(value: unknown): ExcelExportResult {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('canceled' in value) ||
+    typeof value.canceled !== 'boolean'
+  ) {
+    throw new Error('Invalid Excel export response')
+  }
+  return { canceled: value.canceled }
+}
+
+function validateImport(value: unknown): ProductImportResult {
+  if (!value || typeof value !== 'object') throw new Error('Invalid import preview')
+  const preview = value as ProductImportResult
+  if (preview.canceled === true) return { canceled: true }
+  if (
+    preview.canceled !== false ||
+    !(preview.token === null || typeof preview.token === 'string') ||
+    !(preview.expiresAt === null || Number.isSafeInteger(preview.expiresAt)) ||
+    !Array.isArray(preview.errors) ||
+    !preview.errors.every((error) => typeof error === 'string') ||
+    !Array.isArray(preview.rows) ||
+    preview.rows.length > 1000 ||
+    !preview.rows.every(
+      (row) =>
+        row &&
+        Number.isSafeInteger(row.rowNumber) &&
+        row.rowNumber > 1 &&
+        typeof row.sku === 'string' &&
+        typeof row.name === 'string' &&
+        typeof row.priceINR === 'string' &&
+        Array.isArray(row.errors) &&
+        row.errors.every((error) => typeof error === 'string')
+    )
+  ) {
+    throw new Error('Invalid import preview')
+  }
+  return preview
+}
 
 function validateSyncStatus(value: unknown): SyncStatus {
   if (!value || typeof value !== 'object') throw new Error('Invalid sync status')
@@ -77,6 +135,24 @@ function isProduct(value: unknown): value is Product {
 }
 
 const api: AppAPI = {
+  exportQuoteExcel: async (id) => validateExport(await invokeExcel('excel:export-quote', id)),
+  exportProductTemplate: async () =>
+    validateExport(await invokeExcel('excel:export-product-template')),
+  previewProductImport: async () => validateImport(await invokeExcel('excel:preview-products')),
+  confirmProductImport: async (token) => {
+    const result: unknown = await invokeExcel('excel:confirm-products', token)
+    if (
+      !result ||
+      typeof result !== 'object' ||
+      !('importedCount' in result) ||
+      typeof result.importedCount !== 'number' ||
+      !Number.isSafeInteger(result.importedCount) ||
+      result.importedCount < 1 ||
+      result.importedCount > 1000
+    )
+      throw new Error('Invalid import confirmation')
+    return { importedCount: result.importedCount }
+  },
   syncNow: async () => validateSyncStatus(await ipcRenderer.invoke('sync:now')),
   getSyncStatus: async () => validateSyncStatus(await ipcRenderer.invoke('sync:status')),
   getAppVersion: async () => {

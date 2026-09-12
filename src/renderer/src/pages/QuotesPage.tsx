@@ -24,7 +24,7 @@ export default function QuotesPage(): React.JSX.Element {
         Saved quotes
       </Typography>
       <Button component={Link} to="/quotes/new" variant="contained" sx={{ alignSelf: 'start' }}>
-        New quote
+        + New quote
       </Button>
       {query.isPending ? (
         <Typography role="status">Loading quotations…</Typography>

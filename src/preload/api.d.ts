@@ -6,6 +6,10 @@ export interface Product {
 }
 
 export interface AppAPI {
+  exportQuoteExcel: (quoteId: number) => Promise<ExcelExportResult>
+  exportProductTemplate: () => Promise<ExcelExportResult>
+  previewProductImport: () => Promise<ProductImportResult>
+  confirmProductImport: (token: string) => Promise<{ importedCount: number }>
   syncNow: () => Promise<SyncStatus>
   getSyncStatus: () => Promise<SyncStatus>
   getAppVersion: () => Promise<string>
@@ -54,3 +58,4 @@ export interface RuntimeInfo {
   }
 }
 import type { SyncStatus } from '../shared/sync'
+import type { ExcelExportResult, ProductImportResult } from '../shared/excel'

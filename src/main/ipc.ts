@@ -3,6 +3,7 @@ import type { AppAPI } from '../preload/api'
 import type { createProductRepository } from './database/products'
 import type { createQuoteRepository } from './database/quotes'
 import type { createSyncService } from './sync'
+import { createExcelService } from './excel'
 
 export function registerIpcHandlers(
   getWindow: () => BrowserWindow | null,
@@ -11,6 +12,7 @@ export function registerIpcHandlers(
   quotes: ReturnType<typeof createQuoteRepository>,
   sync: ReturnType<typeof createSyncService>
 ): void {
+  const excel = createExcelService(getWindow, products, quotes)
   const validateSender = (event: IpcMainInvokeEvent): void => {
     const window = getWindow()
     const frame = event.senderFrame
@@ -29,6 +31,22 @@ export function registerIpcHandlers(
   ipcMain.handle('app:get-version', (event): Awaited<ReturnType<AppAPI['getAppVersion']>> => {
     validateSender(event)
     return app.getVersion()
+  })
+  ipcMain.handle('excel:export-quote', (event, id: unknown) => {
+    validateSender(event)
+    return excel.exportQuoteExcel(id)
+  })
+  ipcMain.handle('excel:export-product-template', (event) => {
+    validateSender(event)
+    return excel.exportProductTemplate()
+  })
+  ipcMain.handle('excel:preview-products', (event) => {
+    validateSender(event)
+    return excel.previewProductImport(event.sender.id)
+  })
+  ipcMain.handle('excel:confirm-products', (event, token: unknown) => {
+    validateSender(event)
+    return excel.confirmProductImport(event.sender.id, token)
   })
   ipcMain.handle('sync:now', (event) => {
     validateSender(event)

@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { useQuoteQuery } from '../queries/ipc'
+import QuoteExcelExport from '../components/QuoteExcelExport'
 
 const format = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
 
@@ -65,6 +66,7 @@ export default function QuoteDetailPage(): React.JSX.Element {
           Quote #{quote.id} saved for {quote.customerName}.
         </Alert>
       )}
+      <QuoteExcelExport key={quote.id} quoteId={quote.id} />
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Typography variant="h6" component="h3">
           Quote #{quote.id} — {quote.customerName}
