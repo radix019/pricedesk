@@ -1,22 +1,24 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron'
+import type { AppAPI, RuntimeInfo } from './api'
 
-// Custom APIs for renderer
-const api = {}
-
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
+const api: AppAPI = {
+  getAppVersion: async () => {
+    const version: unknown = await ipcRenderer.invoke('app:get-version')
+    if (typeof version !== 'string') throw new Error('Invalid app version response')
+    return version
   }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
 }
+
+// Keep the starter's version display without exposing generic Electron APIs.
+const runtimeInfo: RuntimeInfo = {
+  process: {
+    versions: {
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      node: process.versions.node
+    }
+  }
+}
+
+contextBridge.exposeInMainWorld('api', api)
+contextBridge.exposeInMainWorld('electron', runtimeInfo)

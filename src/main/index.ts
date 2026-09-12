@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import type { AppAPI } from '../preload/api'
 
 function createWindow(): void {
   // Create the browser window.
@@ -13,7 +14,9 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
 
@@ -49,8 +52,13 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.handle('app:get-version', (event): Awaited<ReturnType<AppAPI['getAppVersion']>> => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || event.senderFrame !== window.webContents.mainFrame) {
+      throw new Error('Untrusted app version request')
+    }
+    return app.getVersion()
+  })
 
   createWindow()
 

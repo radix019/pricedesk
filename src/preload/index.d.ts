@@ -1,8 +1,8 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { AppAPI, RuntimeInfo } from './api'
 
 declare global {
   interface Window {
-    electron: ElectronAPI
-    api: unknown
+    electron: RuntimeInfo
+    api: AppAPI
   }
 }
