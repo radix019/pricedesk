@@ -4,7 +4,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: auto;
   background-image: url('./wavy-lines.svg');
   background-size: cover;
   user-select: none;
@@ -127,9 +127,8 @@ code {
 }
 
 .versions {
-  position: absolute;
-  bottom: 30px;
-  margin: 0 auto;
+  position: static;
+  margin: 24px auto 0;
   padding: 15px 0;
   font-family: 'Menlo', 'Lucida Console', monospace;
   display: inline-flex;
@@ -167,7 +166,41 @@ code {
 
 @media (max-width: 350px) {
   .tip,
-  .actions {
+  .creator {
     display: none;
   }
+}
+
+.catalogue {
+  width: min(720px, calc(100vw - 32px));
+  padding-top: 24px;
+  overflow-x: auto;
+}
+
+.catalogue h1 {
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.catalogue table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.catalogue caption {
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.catalogue th,
+.catalogue td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ev-c-gray-1);
+}
+
+.catalogue .price {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }

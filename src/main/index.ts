@@ -1,12 +1,22 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, dialog } from 'electron'
 import { join } from 'path'
+import { pathToFileURL } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import type { AppAPI } from '../preload/api'
+import { openDatabase } from './database'
+import { createProductRepository } from './database/products'
+import { registerIpcHandlers } from './ipc'
+
+let mainWindow: BrowserWindow | null = null
+let database: ReturnType<typeof openDatabase> | undefined
+const rendererUrl =
+  is.dev && process.env['ELECTRON_RENDERER_URL']
+    ? new URL(process.env['ELECTRON_RENDERER_URL']).href
+    : pathToFileURL(join(__dirname, '../renderer/index.html')).href
 
 function createWindow(): void {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 900,
     height: 670,
     show: false,
@@ -20,22 +30,21 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  mainWindow = window
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null
+  })
+  window.on('ready-to-show', () => {
+    window.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  window.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  // Use the same URL for loading and IPC sender validation.
+  window.loadURL(rendererUrl)
 }
 
 // This method will be called when Electron has finished
@@ -52,13 +61,18 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.handle('app:get-version', (event): Awaited<ReturnType<AppAPI['getAppVersion']>> => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!window || event.senderFrame !== window.webContents.mainFrame) {
-      throw new Error('Untrusted app version request')
-    }
-    return app.getVersion()
-  })
+  try {
+    database = openDatabase(app.getPath('userData'))
+    registerIpcHandlers(() => mainWindow, rendererUrl, createProductRepository(database))
+  } catch (error) {
+    console.error('Failed to initialize PriceDesk', error)
+    dialog.showErrorBox(
+      'PriceDesk could not start',
+      'Could not open the product catalogue database.'
+    )
+    app.quit()
+    return
+  }
 
   createWindow()
 
@@ -76,6 +90,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('will-quit', () => {
+  database?.close()
 })
 
 // In this file you can include the rest of your app's specific main process
