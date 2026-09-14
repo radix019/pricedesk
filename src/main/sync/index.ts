@@ -1,8 +1,8 @@
 import axios from 'axios'
 import { createHash } from 'node:crypto'
 import type Database from 'better-sqlite3'
-import { calculateTotals } from '../../shared/money'
-import type { SyncStatus, UploadPayload } from '../../shared/sync'
+import { calculateTotals } from '../../../server/shared/money'
+import type { SyncStatus, UploadPayload } from '../../../server/shared/sync'
 
 interface OutboxRow {
   operationId: string
@@ -16,11 +16,26 @@ export interface UploadResponse {
 }
 type Transport = (payload: string, signal: AbortSignal) => Promise<UploadResponse>
 
-export function createTransport(port = '4317'): Transport {
-  if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535)
-    throw new Error('Invalid API port')
+export function createTransport(baseURL = 'http://13.204.88.45:4317'): Transport {
+  let url: URL
+  try {
+    url = new URL(baseURL)
+  } catch {
+    throw new Error('Invalid API URL: provide an absolute HTTP or HTTPS URL')
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      'Invalid API URL: use HTTP or HTTPS without credentials, a query, or a fragment'
+    )
+  }
   const client = axios.create({
-    baseURL: `http://127.0.0.1:${port}`,
+    baseURL: url.href,
     timeout: 10_000,
     maxRedirects: 0,
     maxContentLength: 64 * 1024,
@@ -57,7 +72,7 @@ export function createSyncService(
   transport: Transport = createTransport(),
   now: () => number = Date.now
 ): {
-  syncNow: () => Promise<SyncStatus>
+  syncNow: (force?: boolean) => Promise<SyncStatus>
   getSyncStatus: () => SyncStatus
   start: () => void
   stop: () => Promise<void>
@@ -66,8 +81,12 @@ export function createSyncService(
   let timer: ReturnType<typeof setInterval> | undefined
   let stopped = false
   const controller = new AbortController()
-  const due = database.prepare<[number], OutboxRow>(`SELECT operationId, payload, attemptCount
-    FROM quote_outbox WHERE status = 'pending' AND nextRetryAt <= ? ORDER BY nextRetryAt, rowid`)
+  const due = database.prepare<
+    [number, number],
+    OutboxRow
+  >(`SELECT operationId, payload, attemptCount
+    FROM quote_outbox WHERE status = 'pending' AND (? = 1 OR nextRetryAt <= ?)
+    ORDER BY nextRetryAt, rowid`)
   const attempt = database.prepare(`UPDATE quote_outbox SET attemptCount = attemptCount + 1,
     nextRetryAt = ? WHERE operationId = ?`)
   const fail = database.prepare(
@@ -98,8 +117,8 @@ export function createSyncService(
     }
   }
 
-  async function run(): Promise<void> {
-    for (const row of due.all(now())) {
+  async function run(force: boolean): Promise<void> {
+    for (const row of due.all(force ? 1 : 0, now())) {
       if (stopped) break
       const nextRetryAt = now() + retryDelay(row.attemptCount + 1)
       // Leave the row pending and record the attempt before I/O. A crash needs no lease reset.
@@ -145,11 +164,12 @@ export function createSyncService(
     }
   }
 
-  function syncNow(): Promise<SyncStatus> {
+  // Manual requests bypass backoff; the background timer only processes due uploads.
+  function syncNow(force = true): Promise<SyncStatus> {
     if (active) return active
     if (stopped) return Promise.resolve(getSyncStatus())
     active = Promise.resolve()
-      .then(run)
+      .then(() => run(force))
       .then(
         () => {
           active = undefined
@@ -168,7 +188,7 @@ export function createSyncService(
     start: () => {
       if (timer || stopped) return
       const tick = (): void => {
-        void syncNow().catch((error) => console.error('Quote sync failed', error))
+        void syncNow(false).catch((error) => console.error('Quote sync failed', error))
       }
       timer = setInterval(tick, 1000)
       tick()

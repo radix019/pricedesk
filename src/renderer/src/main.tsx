@@ -9,7 +9,7 @@ import { HashRouter } from 'react-router-dom'
 import { queryClient } from './queries/client'
 
 const theme = createTheme({
-  palette: { mode: 'dark' },
+  palette: { mode: 'light' },
   typography: { fontFamily: 'system-ui, sans-serif', fontSize: 20 }
 })
 createRoot(document.getElementById('root')!).render(

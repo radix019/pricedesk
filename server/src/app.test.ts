@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createApi } from './app'
 import { openApiDatabase } from './database'
-import { canonicalJson } from '../../src/shared/sync'
+import { canonicalJson } from '../shared/sync'
 import { DatabaseSync } from 'node:sqlite'
 
 const upload = (): object => ({

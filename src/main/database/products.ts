@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { Product } from '../../preload/api'
-import type { ImportedProduct } from '../../shared/excel'
-import { requireInteger } from '../../shared/money'
+import type { ImportedProduct } from '../../../server/shared/excel'
+import { requireInteger } from '../../../server/shared/money'
 
 export function createProductRepository(database: Database.Database): {
   getProducts: () => Product[]

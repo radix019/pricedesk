@@ -57,5 +57,5 @@ export interface RuntimeInfo {
     }
   }
 }
-import type { SyncStatus } from '../shared/sync'
-import type { ExcelExportResult, ProductImportResult } from '../shared/excel'
+import type { SyncStatus } from '../../server/shared/sync'
+import type { ExcelExportResult, ProductImportResult } from '../../server/shared/excel'

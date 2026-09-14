@@ -128,14 +128,15 @@ code {
 
 .versions {
   position: static;
-  margin: 24px auto 0;
+  margin: 24px 0 0;
   padding: 15px 0;
   font-family: 'Menlo', 'Lucida Console', monospace;
   display: inline-flex;
   overflow: hidden;
   align-items: center;
-  border-radius: 22px;
-  background-color: #202127;
+  border-radius: 4px;
+  background-color: #cdcdce;
+  width: fit-content;
   backdrop-filter: blur(24px);
 }
 

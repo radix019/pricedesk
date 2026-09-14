@@ -33,6 +33,24 @@ $ pnpm build:mac
 $ pnpm build:linux
 ```
 
+## Backend connection
+
+Electron connects to `http://13.204.88.45:4317` by default, including packaged builds.
+The main process uploads queued quotes to `/quotes`; React continues to use the
+preload/IPC API. Start the desktop app with `pnpm dev` to use the EC2 backend.
+
+To override the backend, set `PRICEDESK_API_URL` in the environment before launching
+Electron, for example:
+
+```bash
+PRICEDESK_API_URL=http://127.0.0.1:4317 pnpm dev
+```
+
+The URL must use HTTP or HTTPS and must not contain credentials, a query, or a
+fragment. Restart Electron after changing it. This is a runtime environment
+variable; the app does not automatically load it from a `.env` file.
+`PRICEDESK_API_PORT` is now a server-only setting; desktop overrides use the full URL.
+
 ## Local quote sync development
 
 Use Node.js 22.13+ (tested with 22.21). The Express API is an independent package in
@@ -47,12 +65,13 @@ From the repository root:
 pnpm install
 pnpm api:install
 pnpm api:dev             # terminal 1: http://127.0.0.1:4317
-pnpm dev                 # terminal 2: Electron
+PRICEDESK_API_URL=http://127.0.0.1:4317 pnpm dev # terminal 2: Electron
 curl http://127.0.0.1:4317/health
 ```
 
-For a compiled API, run `pnpm api:build`, then `pnpm api:start`. The API always
-binds to `127.0.0.1`. Set `PRICEDESK_API_PORT` in both terminals to change the port.
+For a compiled API, run `pnpm api:build`, then `pnpm api:start`. The API defaults to
+binding to `127.0.0.1`. To change the local port, set `PORT` for the server and use
+the matching port in Electron's `PRICEDESK_API_URL`.
 `PRICEDESK_API_DB` overrides the API database path; relative paths resolve from
 `server/` when using these scripts. The default is `server/data/pricedesk-api.sqlite`.
 The Electron database remains `pricedesk.sqlite` in Electron's `userData` directory.
@@ -67,13 +86,15 @@ Do not point the two applications at the same database.
   transaction. API downtime does not affect local saving. The outbox stores the
   operation UUID, pending/synced/failed status, attempt count, next retry timestamp,
   last error, and validated acknowledgement.
-- Electron main checks the queue every second and at startup. **Sync Now** processes
-  currently due uploads and respects persisted backoff. Only one run can execute.
+- Electron main checks the queue every second and at startup, respecting persisted
+  backoff. **Sync Now** immediately retries pending uploads, bypassing their countdown.
+  Only one run can execute; repeated clicks share any active run.
   Axios requests time out after 10 seconds. Network failures, HTTP 429, and HTTP
   500/502/503/504 retry after 1, 2, 4, … seconds, capped at five minutes. Restarting
   preserves attempts and retry times, including interrupted requests.
 - Other HTTP errors and invalid acknowledgements remain failed for review. The UI
-  shows the quote number, error, attempts, and scheduled retry for transient failures.
+  shows the quote number, error, attempts, and a retry countdown that updates every
+  second for transient failures, plus feedback after a manual sync attempt.
   Sync Now does not reset failures or mutate their payloads. This feature does not
   include a failure-editing or approval workflow.
 - `GET /health` returns `200 {"status":"ok"}` after a database probe.
@@ -110,8 +131,8 @@ Electron marks an upload synced only after checking the acknowledgement's IDs,
 payload hash, draft status, timestamp, and recalculated totals. Losing a response
 after the server commits therefore results in safe duplicate delivery. The renderer
 receives only `syncNow()` and `getSyncStatus()` IPC methods; it cannot select URLs,
-change payloads, or access the databases. This is a localhost development API,
-without authentication or a production deployment setup.
+change payloads, or access the databases. The API currently has no authentication.
+See [server deployment documentation](server/README.md) for the EC2 server setup.
 
 ### Verification
 

@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
-import { canonicalJson, type UploadPayload } from '../../shared/sync'
+import { canonicalJson, type UploadPayload } from '../../../server/shared/sync'
 import type { CreateQuoteInput, Product, Quote, QuoteItem, QuoteSummary } from '../../preload/api'
-import { calculateTotals, requireInteger } from '../../shared/money'
+import { calculateTotals, requireInteger } from '../../../server/shared/money'
 
 function validateInput(input: unknown): CreateQuoteInput {
   if (typeof input !== 'object' || input === null) throw new Error('Invalid quote')

@@ -12,12 +12,10 @@ function readSchemaVersion(db: DatabaseSync): number {
 
 export function isDatabaseBusy(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('errcode' in error)) return false
-  // SQLite's low byte is the primary result code, including extended BUSY/LOCKED codes.
   return typeof error.errcode === 'number' && [5, 6].includes(error.errcode & 0xff)
 }
 
 export function rollbackAfterError(db: DatabaseSync): void {
-  // Node 22.13–22.15 do not expose isTransaction; retain the guarded fallback.
   if (db.isTransaction === false) return
   try {
     db.exec('ROLLBACK')
@@ -32,10 +30,8 @@ export function openApiDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path)
   try {
     db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000')
-    // Opening an already-migrated database only needs a read, not a writer reservation.
     if (readSchemaVersion(db) === latestVersion) return db
     db.exec('BEGIN IMMEDIATE')
-    // Another process may have migrated while we waited for the write lock.
     const version = readSchemaVersion(db)
     if (version === 0)
       db.exec(`

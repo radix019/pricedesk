@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ImportedProduct, ProductImportPreview } from '../../shared/excel'
+import type { ImportedProduct, ProductImportPreview } from '../../../server/shared/excel'
 import type { ValidatedImport } from './workbooks'
 
 export const IMPORT_TOKEN_TTL = 5 * 60 * 1000

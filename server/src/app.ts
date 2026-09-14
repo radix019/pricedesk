@@ -1,8 +1,8 @@
 import express, { type ErrorRequestHandler } from 'express'
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { canonicalJson, isUuid, type QuoteAcknowledgement } from '../../src/shared/sync'
-import { calculateTotals } from '../../src/shared/money'
+import { canonicalJson, isUuid, type QuoteAcknowledgement } from '../shared/sync'
+import { calculateTotals } from '../shared/money'
 import { validateUpload } from './validation'
 import { isDatabaseBusy, rollbackAfterError } from './database'
 

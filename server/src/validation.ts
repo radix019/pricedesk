@@ -1,5 +1,5 @@
-import { calculateTotals, requireInteger } from '../../src/shared/money'
-import { isUuid, type UploadPayload } from '../../src/shared/sync'
+import { calculateTotals, requireInteger } from '../shared/money'
+import { isUuid, type UploadPayload } from '../shared/sync'
 
 function record(value: unknown, keys: string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))

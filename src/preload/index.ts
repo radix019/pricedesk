@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppAPI, Product, Quote, QuoteSummary, RuntimeInfo } from './api'
-import type { SyncStatus } from '../shared/sync'
-import type { ExcelExportResult, ProductImportResult } from '../shared/excel'
+import type { SyncStatus } from '../../server/shared/sync'
+import type { ExcelExportResult, ProductImportResult } from '../../server/shared/excel'
 
 async function invokeExcel(
   channel:

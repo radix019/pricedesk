@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import type { Quote } from '../../preload/api'
-import type { ImportedProduct, ProductImportRow } from '../../shared/excel'
-import { rupeesToPaise } from '../../shared/money'
+import type { ImportedProduct, ProductImportRow } from '../../../server/shared/excel'
+import { rupeesToPaise } from '../../../server/shared/money'
 
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024
 export const MAX_PRODUCT_ROWS = 1000

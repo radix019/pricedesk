@@ -7,8 +7,8 @@ import { join } from 'node:path'
 import { openDatabase } from '../database'
 import { createQuoteRepository } from '../database/quotes'
 import { createSyncService, createTransport, retryDelay, type UploadResponse } from './index'
-import type { UploadPayload } from '../../shared/sync'
-import { calculateTotals } from '../../shared/money'
+import type { UploadPayload } from '../../../server/shared/sync'
+import { calculateTotals } from '../../../server/shared/money'
 import { createServer } from 'node:http'
 
 const input = {
@@ -66,10 +66,10 @@ test('lost acknowledgement and restart redeliver the same persisted operation an
       },
       () => time
     )
-    await restarted.syncNow()
+    await restarted.syncNow(false)
     assert.equal(deliveries, 0)
     time = 2000
-    status = await restarted.syncNow()
+    status = await restarted.syncNow(false)
     assert.equal(deliveries, 1)
     assert.equal(status.syncedCount, 1)
     assert.equal(status.pendingCount, 0)
@@ -144,12 +144,16 @@ test('retryable errors back off; validation, conflict and invalid acknowledgemen
       assert.equal(status.failedCount, retry ? 0 : 1)
       assert.equal(status.pendingCount, retry ? 1 : 0)
       assert.equal(status.syncedCount, 0)
-      await service.syncNow()
+      await service.syncNow(false)
       assert.equal(calls, 1)
       time = 1000
-      await service.syncNow()
+      await service.syncNow(false)
       assert.equal(calls, retry ? 2 : 1)
       if (retry) assert.equal(service.getSyncStatus().failures[0].nextRetryAt, 3000)
+      // Manual retries ignore the future deadline but leave permanent failures for review.
+      await service.syncNow()
+      assert.equal(calls, retry ? 3 : 1)
+      if (retry) assert.equal(service.getSyncStatus().failures[0].nextRetryAt, 5000)
       await service.stop()
     }
     assert.equal(retryDelay(1000), 300_000)
@@ -159,7 +163,43 @@ test('retryable errors back off; validation, conflict and invalid acknowledgemen
   }
 })
 
-test('Axios transport sends immutable JSON over loopback and supports shutdown cancellation', async () => {
+test('manual sync retries immediately during backoff and uploads the same persisted payload', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pricedesk-manual-sync-'))
+  const db = openDatabase(directory)
+  try {
+    createQuoteRepository(db).createQuote(input)
+    const payloads: string[] = []
+    const service = createSyncService(
+      db,
+      async (payload) => {
+        payloads.push(payload)
+        if (payloads.length === 1) throw new Error('Offline')
+        return acknowledgement(payload)
+      },
+      () => 1000
+    )
+    await service.syncNow(false)
+    assert.equal(service.getSyncStatus().failures[0].nextRetryAt, 2000)
+    await service.syncNow(false)
+    assert.equal(payloads.length, 1)
+
+    const request = service.syncNow()
+    assert.equal(service.syncNow(), request)
+    const status = await request
+    assert.equal(payloads.length, 2)
+    assert.equal(payloads[1], payloads[0])
+    assert.equal(status.syncedCount, 1)
+    assert.equal(status.pendingCount, 0)
+    assert.equal(status.running, false)
+    assert.deepEqual(status.failures, [])
+    await service.stop()
+  } finally {
+    db.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('Axios transport sends immutable JSON to the configured URL and supports shutdown cancellation', async () => {
   const server = createServer((req, res) => {
     if (req.url === '/quotes') {
       let body = ''
@@ -176,7 +216,7 @@ test('Axios transport sends immutable JSON over loopback and supports shutdown c
   try {
     const address = server.address()
     assert.ok(address && typeof address === 'object')
-    const transport = createTransport(String(address.port))
+    const transport = createTransport(`http://127.0.0.1:${address.port}`)
     const response = await transport('{"operationId":"example"}', new AbortController().signal)
     assert.equal(response.status, 200)
     assert.deepEqual(response.data, { operationId: 'example' })
@@ -185,6 +225,22 @@ test('Axios transport sends immutable JSON over loopback and supports shutdown c
     await assert.rejects(transport('{}', controller.signal))
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})
+
+test('transport rejects malformed or unsupported API URLs before sending requests', () => {
+  for (const url of [
+    '',
+    '4317',
+    'localhost:4317',
+    'http://localhost:65536',
+    'file:///tmp/quotes',
+    'ftp://example.com',
+    'https://user:password@example.com',
+    'https://example.com?token=secret',
+    'https://example.com#quotes'
+  ]) {
+    assert.throws(() => createTransport(url), /Invalid API URL/, url)
   }
 })
 

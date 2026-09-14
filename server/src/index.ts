@@ -1,17 +1,26 @@
-import { resolve } from 'node:path'
-import { openApiDatabase } from './database'
-import { createApi } from './app'
+import { readConfig } from './config'
+import { startApi } from './runtime'
 
-const port = Number(process.env.PRICEDESK_API_PORT ?? 4317)
-if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid API port')
-const db = openApiDatabase(resolve(process.env.PRICEDESK_API_DB ?? 'data/pricedesk-api.sqlite'))
-const server = createApi(db).listen(port, '127.0.0.1', () => {
-  console.log(`PriceDesk development API: http://127.0.0.1:${port}`)
-})
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.once(signal, () =>
-    server.close(() => {
-      db.close()
+async function main(): Promise<void> {
+  process.umask(0o077)
+  const config = readConfig()
+  const api = await startApi(config)
+  console.log(`PriceDesk API: http://${config.host}:${config.port}`)
+  const shutdown = (): void => {
+    void api.close().catch((error) => {
+      console.error('API shutdown failed', error)
+      process.exitCode = 1
     })
-  )
+  }
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, shutdown)
+  api.server.on('error', (error) => {
+    console.error('API server failed', error)
+    process.exitCode = 1
+    shutdown()
+  })
 }
+
+void main().catch((error) => {
+  console.error('API startup failed', error)
+  process.exitCode = 1
+})
